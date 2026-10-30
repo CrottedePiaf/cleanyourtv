@@ -29,6 +29,7 @@ public class GlassView extends View {
     /** glass_style rim or halo: no sheen and no fill, only the crisp rim (and, for halo, a lighter outer glow). */
     private boolean flat;
     private boolean halo;
+    private boolean neon;
 
     public GlassView(Context context, AttributeSet attrs) {
         super(context, attrs);
@@ -69,6 +70,18 @@ public class GlassView extends View {
         invalidate();
     }
 
+    void setNeon(boolean enabled) {
+        neon = enabled;
+        if (enabled) setAccent(NeonStyle.BLUE);
+        updateRim();
+        invalidate();
+    }
+
+    private void updateRim() {
+        rim.setShader(neon && getWidth() > 0 ? new LinearGradient(0, 0, getWidth(), getHeight(),
+                new int[]{0xFFA9D9FF, NeonStyle.BLUE, NeonStyle.VIOLET}, null, Shader.TileMode.CLAMP) : null);
+    }
+
     void setRadius(float px) {
         radius = px;
         invalidate();
@@ -77,6 +90,7 @@ public class GlassView extends View {
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
+        updateRim();
         fill.setShader(new LinearGradient(0, 0, 0, h, 0x3DFFFFFF, 0x12FFFFFF, Shader.TileMode.CLAMP));
         specular.setShader(new LinearGradient(0, 0, 0, h * 0.45f, 0x66FFFFFF, 0x00FFFFFF, Shader.TileMode.CLAMP));
     }
