@@ -6,6 +6,30 @@ network access, video or runtime blur is added.
 
 ## Activation
 
+### Standalone test APK for an existing installation
+
+Select `neon-test` when running `build-apk.yml` on `neon-premium`. Download the
+`CleanYourTV-Neon-Test` artifact and install its `app-debug.apk` as a regular TV app.
+Open **CleanYourTV Neon Test** from the app list. The package is
+`com.crottedepiaf.cleanyourtv.neontest`, so it can coexist with the installed `com.gathin.tvhome`.
+Do not uninstall the current Home or use the launcher install/takeover script for this visual test.
+
+The standalone manifest has no HOME filter, accessibility/notification services, boot receivers or
+secure-settings permission. It does not become the default Home: the physical HOME button continues
+to use the existing launcher. Its theme files, preferences and app order are separate; it starts with
+its own defaults rather than importing the household's settings. Remote remapping and Home takeover
+are intentionally outside this test app. Neon is enabled by default and launcher settings remain usable.
+
+Build the same variant locally with `./gradlew -PneonPreview=true assembleDebug` in `launcher/`.
+The ordinary build does not select the standalone manifest. The workflow validates the merged APK
+manifest with [`tools/check-neon-preview.py`](../tools/check-neon-preview.py) before uploading it.
+
+The workflow caches this test app's debug signing key between runs to allow repeat updates while
+the cache exists. Cache eviction or deletion can still change the key; this is not a permanent signing
+backup and it cannot recover the original launcher's lost key. No key is placed in APK artifacts.
+
+### Launcher build
+
 The test APK built from this branch defaults to `neon` through
 [`config.xml`](../launcher/app/src/main/res/values/config.xml). An existing theme can override that value;
 merge `"glass_style": "neon"` into the

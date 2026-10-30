@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="glass_style" translatable="false">neon</string>
+    <bool name="launcher_settings_button">true</bool>
+    <bool name="show_home_settings_shortcut">false</bool>
+    <bool name="restore_key_services">false</bool>
+    <bool name="handle_view_inputs">false</bool>
+    <bool name="key_filter">false</bool>
+    <bool name="boot_to_live_tv">false</bool>
+    <bool name="open_on_start_choice">false</bool>
+    <bool name="power_on_home">false</bool>
+    <bool name="power_on_home_always">false</bool>
+</resources>

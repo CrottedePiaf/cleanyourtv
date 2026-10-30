@@ -3,6 +3,12 @@ name: Build CleanYourTV APK
 
 on:
   workflow_dispatch:
+    inputs:
+      variant:
+        description: APK to build (neon-test does not replace Home)
+        type: choice
+        options: [launcher, neon-test]
+        default: launcher
 
 permissions:
   contents: read
@@ -23,16 +29,37 @@ jobs:
       - name: Install Android SDK 34
         run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0"
 
+      # Reuse the test app's debug signing key between runs while this branch cache is retained.
+      # This is not a production signing-key backup; no key is uploaded as an artifact.
+      - name: Restore Neon Test signing key
+        if: inputs.variant == 'neon-test'
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: neon-test-debug-keystore-v1-${{ runner.os }}
+
       - name: Build launcher APK
         working-directory: launcher
+        env:
+          NEON_PREVIEW: ${{ inputs.variant == 'neon-test' }}
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon assembleDebug
+          if [ "$NEON_PREVIEW" = "true" ]; then
+            ./gradlew --no-daemon -PneonPreview=true assembleDebug
+          else
+            ./gradlew --no-daemon assembleDebug
+          fi
+
+      - name: Check Neon Test cannot take over Home
+        if: inputs.variant == 'neon-test'
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest print launcher/app/build/outputs/apk/debug/app-debug.apk > "$RUNNER_TEMP/neon-test-manifest.xml"
+          python3 tools/check-neon-preview.py "$RUNNER_TEMP/neon-test-manifest.xml"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: CleanYourTV-APK
+          name: ${{ inputs.variant == 'neon-test' && 'CleanYourTV-Neon-Test' || 'CleanYourTV-APK' }}
           path: launcher/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 7
