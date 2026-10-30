@@ -1,15 +1,17 @@
 # Neon Premium — CrottedePiaf fork
 
-Neon Premium is an opt-in native skin: electric blue and violet, glass surfaces, a gradient focus rim,
+Neon Premium is a native skin enabled by default on the `neon-premium` test branch: electric blue and violet, glass surfaces, a gradient focus rim,
 cached background lights and short transitions. No new dependency, permission, accessibility service,
 network access, video or runtime blur is added.
 
 ## Activation
 
-Build this fork with `glass_style` set to `neon` in
-[`config.xml`](../launcher/app/src/main/res/values/config.xml), or merge `"glass_style": "neon"` into the
+The test APK built from this branch defaults to `neon` through
+[`config.xml`](../launcher/app/src/main/res/values/config.xml). An existing theme can override that value;
+merge `"glass_style": "neon"` into the
 TV's **existing** theme JSON. Do not replace a device's configuration with a generic theme: it carries
-the household's source and remote mappings. The default remains `glass` for other installations.
+the household's source and remote mappings. There is currently no style selector in Launcher settings.
+To use the original appearance, set `"glass_style": "glass"` in the existing theme JSON.
 
 The skin reuses the existing dock, grid, app library and quick panel. Existing options can refine the
 composition: `cinematic_home`, `dock_glass`, `always_show_names`, `columns`, `rows_below_dock`,
