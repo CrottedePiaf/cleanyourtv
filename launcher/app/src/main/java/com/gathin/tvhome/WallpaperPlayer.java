@@ -32,8 +32,11 @@ import java.util.concurrent.Executors;
 /** Displays and rotates a theme's local wallpaper images while Home is visible. */
 final class WallpaperPlayer {
     private final FrameLayout root;
+    private final boolean animations;
+    private final boolean reducedMotion;
     private final ImageView image;
     private final int backgroundColor;
+    private final android.graphics.drawable.Drawable fallback;
     private final List<File> files;
     private final long interval;
     private final String order;
@@ -64,7 +67,12 @@ final class WallpaperPlayer {
 
     WallpaperPlayer(Context context, FrameLayout root, Config config) {
         this.root = root;
-        backgroundColor = config.backgroundColor;
+        animations = config.animations;
+        reducedMotion = config.reducedMotion;
+        backgroundColor = config.neonPremium ? NeonStyle.INK : config.backgroundColor;
+        fallback = config.neonPremium ? NeonStyle.backdrop(context.getResources())
+                : new android.graphics.drawable.ColorDrawable(backgroundColor);
+        root.setBackground(fallback);
         files = new ArrayList<>(config.wallpapers);
         interval = config.wallpaperRotationMinutes * 60_000L;
         bitmapConfig = config.wallpaperTrueColor ? Bitmap.Config.ARGB_8888 : Bitmap.Config.RGB_565;
@@ -145,7 +153,7 @@ final class WallpaperPlayer {
         // let Android reclaim its native buffer after rendering releases it instead of recycling it mid-frame.
         current = null;
         displayed = "";
-        root.setBackgroundColor(backgroundColor);
+        root.setBackground(fallback);
     }
 
     /** The pictures the rotation picks from now: wallpaper_moods' group for the time of day, or the whole collection. */
@@ -241,7 +249,7 @@ final class WallpaperPlayer {
             return;
         }
         caption.setContentDescription(name);
-        if (!fade || caption.getAlpha() == 0f) {
+        if (!fade || !animations || reducedMotion || caption.getAlpha() == 0f) {
             caption.setText(name);
             caption.setAlpha(1f);
             return;

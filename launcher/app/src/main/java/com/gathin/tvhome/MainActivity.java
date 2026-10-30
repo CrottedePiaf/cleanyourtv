@@ -109,6 +109,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     /** Tiles per row and dock slots (res/values/config.xml, columns). Set in onCreate. */
     static int COLUMNS = 4;
     private boolean rtlAppGrid;
+    private boolean neonPremium;
     private static final long MINUTE_MS = 60_000L;
     private static final long STATS_MS = 10_000L;
     /**
@@ -435,6 +436,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         density = getResources().getDisplayMetrics().density;
         // config.xml, overlaid by config.json from a pushed theme (see Config and tools/theme.sh).
         Config cfg = Config.load(this);
+        neonPremium = cfg.neonPremium;
         homeAppKeys = RemoteKeys.parseAppKeys(cfg.appKeys);
         clockFormat = cfg.clockFormat;
         ClockFormat.apply(getWindow().getDecorView(), clockFormat);
@@ -456,7 +458,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         singleRow = cfg.singleRow;
         focusOvershoot = cfg.focusOvershoot;
         festival = cfg.festival;
-        festive = festival.active(LocalDate.now());
+        festive = !neonPremium && festival.active(LocalDate.now());
         liveTvPkg = cfg.liveTvPackage;
         idleClockMs = cfg.homeIdleClockMinutes * MINUTE_MS;
         backOpensClock = cfg.backOpensClock;
@@ -487,6 +489,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         glass = findViewById(R.id.glass);
         glass.setStyle(cfg.glassStyle);
         if (festive) glass.setAccent(festival.accentColor());
+        if (neonPremium) glass.setNeon(true);
         ambient = findViewById(R.id.ambient);
         // The glow is one bitmap, so its alpha can be applied while drawing it. Otherwise every frame of
         // a fade renders it into a full-screen offscreen buffer first.
@@ -651,7 +654,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // Reduced motion: the tiles are simply there, with no entrance (reloadApps skips it there too).
         if (animations && !reducedMotion) {
             grid.setLayoutAnimation(new LayoutAnimationController(
-                    AnimationUtils.loadAnimation(this, R.anim.tile_enter), 0.06f));
+                    AnimationUtils.loadAnimation(this, neonPremium ? R.anim.neon_enter : R.anim.tile_enter), 0.06f));
         }
         adapter = new AppAdapter(this, this, COLUMNS, cfg);
         dockApps = cfg.dockApps;
@@ -888,6 +891,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             }
         }
         if (festive) applyFestiveSkin((TextView) btnInputs, (TextView) btnSettings);
+        if (neonPremium) {
+            NeonStyle.controls(findViewById(R.id.topButtons));
+            heroName.setTextColor(0xFFE2EAFF);
+        }
 
         // Hide the glass when focus leaves the tiles.
         getWindow().getDecorView().getViewTreeObserver().addOnGlobalFocusChangeListener((oldF, newF) -> {
@@ -1022,7 +1029,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         super.onResume();
         resumed = true;
         // A festival that started or ended while Home was in the background: rebuild with or without it.
-        if (festive != festival.active(LocalDate.now())) {
+        if (festive != (!neonPremium && festival.active(LocalDate.now()))) {
             recreate();
             return;
         }
@@ -1071,7 +1078,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (festive && lamp != null) {
             lamp.start();
             LocalDate today = LocalDate.now();
-            if (!reducedMotion && !today.equals(lastPetalShower)) {
+            if (animations && !reducedMotion && !today.equals(lastPetalShower)) {
                 lastPetalShower = today;
                 handler.postDelayed(this::playPetalShower, 450);
             }
@@ -1253,6 +1260,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         handler.removeCallbacks(turnTick);
         if (lamp != null) lamp.stop();
         cancelPendingFocusScroll();
+        springX.cancel();
+        springY.cancel();
+        grid.clearAnimation();
         // Nothing of ours stays on screen over another app; an undecided prompt simply returns next time.
         if (cardPrompt != null) cardPrompt.dismiss();
         if (appLibrary != null) appLibrary.close();
@@ -1761,8 +1771,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // Cinematic shelf: the highlight glows in the dock app's colour, plain white in the grid (and on the dock with
         // cinematic_white_focus). app_glow: every tile. In a single row every tile is the dock's kind.
         boolean coloured = (appGlow || cinematic && !cinematicWhiteFocus && (singleRow || position < COLUMNS)) && !festive;
-        int accent = coloured ? adapter.ambientColorAt(position) : 0;
-        if ((cinematic || appGlow) && !festive && accent != glassAccent) {
+        int accent = neonPremium ? NeonStyle.BLUE : coloured ? adapter.ambientColorAt(position) : 0;
+        if ((neonPremium || cinematic || appGlow) && (!festive || neonPremium) && accent != glassAccent) {
             glassAccent = accent;
             glass.setAccent(accent);
         }
@@ -1803,7 +1813,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             showGlowOnly(position);
             // Scroll just enough so the whole glass (not only the tile) is visible.
             revealRect.set(0, -(int) pad * 2, item.getWidth(), item.getHeight() + (int) pad);
-            grid.requestChildRectangleOnScreen(item, revealRect, reducedMotion);
+            grid.requestChildRectangleOnScreen(item, revealRect, !animations || reducedMotion);
         }
     }
 
@@ -1827,7 +1837,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
     private void showHero(int position, float dockTopInRoot) {
         String label = adapter.labelAt(position);
-        int color = adapter.ambientColorAt(position);
+        int color = neonPremium ? NeonStyle.accent(position) : adapter.ambientColorAt(position);
         float y = dockTopInRoot - 14 * density - 26 * density - hero.getHeight();
         boolean changed = !label.contentEquals(heroName.getText());
         if (cinematic && heroArtAlpha > 0f) showHeroArt(position);
@@ -2102,7 +2112,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      * name above the dock does not show (every grid tile has its name underneath).
      */
     private void showGlowOnly(int position) {
-        int color = adapter.ambientColorAt(position);
+        int color = neonPremium ? NeonStyle.accent(position) : adapter.ambientColorAt(position);
         stopAmbientAnimation();
         hero.animate().cancel();
         ambient.animate().cancel();
@@ -2940,9 +2950,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             SpookyIconDrawable bat = new SpookyIconDrawable(getResources(), density, SpookyIconDrawable.BAT);
             SpookyIconDrawable ghost = new SpookyIconDrawable(getResources(), density, SpookyIconDrawable.GHOST);
             JackOLanternDrawable pumpkin = new JackOLanternDrawable(getResources(), density);
-            bat.setReducedMotion(reducedMotion);
-            ghost.setReducedMotion(reducedMotion);
-            pumpkin.setReducedMotion(reducedMotion);
+            bat.setReducedMotion(reducedMotion || !animations);
+            ghost.setReducedMotion(reducedMotion || !animations);
+            pumpkin.setReducedMotion(reducedMotion || !animations);
             lamp = pumpkin;
             setFestiveIcon(inputs, bat);
             setFestiveIcon(btnWifi, pumpkin);
@@ -2954,9 +2964,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         bell = new BellDrawable(density);
         marigold = new MarigoldDrawable(density);
         DiyaDrawable diya = new DiyaDrawable(density);
-        bell.setReducedMotion(reducedMotion);
-        marigold.setReducedMotion(reducedMotion);
-        diya.setReducedMotion(reducedMotion);
+        bell.setReducedMotion(reducedMotion || !animations);
+        marigold.setReducedMotion(reducedMotion || !animations);
+        diya.setReducedMotion(reducedMotion || !animations);
         lamp = diya;
         setFestiveIcon(inputs, bell);
         setFestiveIcon(btnWifi, diya);
@@ -3479,13 +3489,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
     /** Drop in: fade and unfold from the top edge, hanging under the anchor pill. */
     private void dropIn(PopupWindow popup, View panel, View anchor, int gravity) {
-        panel.setAlpha(0f);
+        if (neonPremium) NeonStyle.panel(panel);
         panel.setPivotY(0f);
-        panel.setScaleY(0.92f);
-        panel.setTranslationY(-8 * density);
         popup.showAsDropDown(anchor, 0, (int) (10 * density), gravity);
-        panel.animate().alpha(1f).scaleY(1f).translationY(0f).setDuration(reducedMotion ? Motion.REDUCED_MS : 220)
-                .setInterpolator(new android.view.animation.DecelerateInterpolator(1.6f)).start();
+        Motion.panel(panel, animations, reducedMotion, -8 * density);
     }
 
     private View addSeparator(LinearLayout rows) {
@@ -3718,13 +3725,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (at[1] + card.getHeight() + gap + height <= root.getHeight()) {
             dropIn(popup, panel, card, Gravity.START);
         } else {
-            panel.setAlpha(0f);
+            if (neonPremium) NeonStyle.panel(panel);
             panel.setPivotY(height);
-            panel.setScaleY(0.92f);
-            panel.setTranslationY(8 * density);
             popup.showAtLocation(root, Gravity.NO_GRAVITY, at[0], Math.max(0, at[1] - gap - height));
-            panel.animate().alpha(1f).scaleY(1f).translationY(0f).setDuration(220)
-                    .setInterpolator(new android.view.animation.DecelerateInterpolator(1.6f)).start();
+            Motion.panel(panel, animations, reducedMotion, 8 * density);
         }
         rows.getChildAt(0).requestFocus();
     }

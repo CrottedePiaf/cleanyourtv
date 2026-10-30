@@ -83,6 +83,7 @@ final class AppLibraryDialog {
     /** library_ok_opens without app_library_selection: OK opens every app, Add to Home is in the hold menu. */
     private final boolean okOpens;
     private final boolean animations;
+    private final boolean neonPremium;
     private final boolean rtl;
     private TextView instructions;
     private int totalApps;
@@ -150,6 +151,7 @@ final class AppLibraryDialog {
     AppLibraryDialog(Activity activity, boolean animations, boolean reducedMotion, boolean selectionMode, boolean okOpens, Predicate<String> onHome, Runnable changed, Runnable dismissed, Set<String> excludedApps) {
         this.activity = activity;
         this.animations = animations;
+        this.neonPremium = Config.load(activity).neonPremium;
         this.rtl = activity.getResources().getBoolean(R.bool.rtl_app_grid);
         this.reducedMotion = reducedMotion;
         this.selectionMode = selectionMode;
@@ -164,6 +166,7 @@ final class AppLibraryDialog {
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setPadding(dp(12), dp(8), dp(12), dp(12));
         panel.setBackgroundResource(R.drawable.glass_panel);
+        if (neonPremium) NeonStyle.panel(panel);
         View decor = activity.getWindow().getDecorView();
         catalogWidth = Math.min(dp(800), Math.max(dp(200), decor.getWidth() - dp(64)));
         int width = catalogWidth;
@@ -204,8 +207,8 @@ final class AppLibraryDialog {
             params.dimAmount = 0.55f;
             activity.getWindowManager().updateViewLayout(container, params);
         }
-        panel.setAlpha(0f);
-        panel.animate().alpha(1f).setDuration(reducedMotion ? Motion.REDUCED_MS : 180).start();
+        if (neonPremium) NeonStyle.panel(panel);
+        Motion.panel(panel, animations, reducedMotion, 0f);
     }
 
     /** Called by the activity's existing package receiver; an uninstall cannot leave a stale action. */
@@ -402,6 +405,7 @@ final class AppLibraryDialog {
         list.setAdapter(new Catalog());
         shelf.addView(list, new FrameLayout.LayoutParams(-1, -1));
         highlight = new GlassView(activity, null);
+        if (neonPremium) highlight.setNeon(true);
         highlight.setRadius(dp(20));
         highlight.setAlpha(0f);
         highlight.setFocusable(false);
@@ -512,7 +516,14 @@ final class AppLibraryDialog {
         // TV apps keep the leanback launch intent, so an app already running resumes instead of restarting.
         if (tvPackages.contains(app.activityInfo.packageName)) intent.addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
-        try { activity.startActivity(intent); }
+        if (!animations) intent.addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION);
+        try {
+            activity.startActivity(intent);
+            if (!animations) activity.overridePendingTransition(0, 0);
+            else if (neonPremium && !reducedMotion) {
+                activity.overridePendingTransition(R.anim.app_open_enter, R.anim.app_open_exit);
+            }
+        }
         catch (ActivityNotFoundException | SecurityException e) {
             Toast.makeText(activity, activity.getString(R.string.cant_open, label(app)), Toast.LENGTH_SHORT).show();
         }
@@ -565,13 +576,10 @@ final class AppLibraryDialog {
                 panelLocation[0] + panel.getWidth(), panelLocation[1] + panel.getHeight());
         int x = Math.max(screen.left + dp(12), Math.min(location[0] + anchor.getWidth() - dp(12), screen.right - menuWidth - dp(12)));
         int y = Math.max(screen.top + dp(12), Math.min(location[1] + dp(8), screen.bottom - menuPanel.getMeasuredHeight() - dp(12)));
-        menuPanel.setAlpha(0f);
         menuPanel.setPivotY(0f);
-        menuPanel.setScaleY(0.92f);
-        menuPanel.setTranslationY(-dp(8));
+        if (neonPremium) NeonStyle.panel(menuPanel);
         menu.showAtLocation(activity.getWindow().getDecorView(), Gravity.TOP | Gravity.START, x, y);
-        menuPanel.animate().alpha(1f).scaleY(1f).translationY(0f).setDuration(reducedMotion ? Motion.REDUCED_MS : 220)
-                .setInterpolator(new android.view.animation.DecelerateInterpolator(1.6f)).start();
+        Motion.panel(menuPanel, animations, reducedMotion, -dp(8));
         rows.getChildAt(0).requestFocus();
     }
 

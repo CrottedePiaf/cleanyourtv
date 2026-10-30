@@ -8,6 +8,12 @@ import static org.junit.Assert.assertEquals;
 public class GlassStyleTest {
 
     @Test
+    public void neonIsAnExplicitStyleAndAcceptsWhitespace() {
+        assertEquals(Config.GLASS_NEON, Config.glassStyle("neon"));
+        assertEquals(Config.GLASS_NEON, Config.glassStyle(" Neon "));
+    }
+
+    @Test
     public void rimByNameAnyCase() {
         assertEquals(Config.GLASS_RIM, Config.glassStyle("rim"));
         assertEquals(Config.GLASS_RIM, Config.glassStyle(" Rim "));

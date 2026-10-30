@@ -201,6 +201,7 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
     /** Apps pre-seeded into the App library's "added" set (config.xml library_apps); empty by default. */
     private final Set<String> libraryPreload;
     private final boolean animations;
+    private final boolean neonPremium;
     private final boolean advancedEffects;
     private final boolean showLibrary;
     /** Packages with a leanback entry at the last reload(): their tiles launch with the leanback category. */
@@ -231,6 +232,7 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         this.hidden = new HashSet<>(cfg.hiddenApps);
         this.libraryPreload = new HashSet<>(cfg.libraryApps);
         this.animations = cfg.animations;
+        this.neonPremium = cfg.neonPremium;
         this.advancedEffects = cfg.animations && cfg.advancedEffects;
         this.showHomeSettings = cfg.showHomeSettingsShortcut;
         this.showLibrary = LibraryApps.showPill(cfg.appLibrary, cfg.libraryButton, cfg.showLibraryPill);
@@ -401,6 +403,7 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         if (viewType == 1) {
             View row = LayoutInflater.from(ctx).inflate(R.layout.row_app_library, parent, false);
             View button = row.findViewById(R.id.btnLibrary);
+            if (neonPremium) NeonStyle.controls(button);
             button.setOnClickListener(v -> listener.onLibraryRequested());
             button.setOnFocusChangeListener((v, focused) -> { if (focused) listener.onLibraryFocused(); });
             button.setOnKeyListener((v, key, event) -> {
@@ -417,6 +420,7 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         int inner = width - parent.getPaddingLeft() - parent.getPaddingRight();
         int w = tileWidthPx(inner, parent.getHeight(), dockSize, rowsBelowDock, dockTitle, dockRow, density), h = tileHeightPx(w);
         View card = v.findViewById(R.id.card);
+        if (neonPremium) card.setBackground(NeonStyle.surface(card, false, 16));
         ViewGroup.LayoutParams cardLp = card.getLayoutParams();
         cardLp.width = w;
         cardLp.height = h;
@@ -550,9 +554,12 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             if (ctx.getPackageManager().resolveActivity(byAction, 0) != null) i = byAction;
         }
         try {
+            if (!animations) i.addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION);
             ctx.startActivity(i);
             if (cinematic) LastOpened.record(ctx, e.pkg);
-            if (advancedEffects && !reducedMotion && ctx instanceof Activity) {
+            if (!animations && ctx instanceof Activity) {
+                ((Activity) ctx).overridePendingTransition(0, 0);
+            } else if ((advancedEffects || neonPremium) && !reducedMotion && ctx instanceof Activity) {
                 ((Activity) ctx).overridePendingTransition(R.anim.app_open_enter, R.anim.app_open_exit);
             }
         } catch (Exception ex) {

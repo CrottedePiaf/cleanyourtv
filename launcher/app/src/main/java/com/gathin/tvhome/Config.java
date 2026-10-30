@@ -87,6 +87,7 @@ final class Config {
     final String inputUriScheme;
     final int columns;
     final boolean animations;
+    final boolean neonPremium;
     final boolean advancedEffects;
     final int rowsBelowDock;
     final boolean shamsiDate;
@@ -242,11 +243,11 @@ final class Config {
     final Map<String, Set<String>> wallpaperMoods;
     /** Shape of the glow behind the focused app (config.xml, glow_style): {@link #GLOW_RADIAL} or {@link #GLOW_HORIZON}. */
     final String glowStyle;
-    /** The focus highlight's look (config.xml, glass_style): {@link #GLASS_DEFAULT}, {@link #GLASS_RIM} or {@link #GLASS_HALO}. */
+    /** The focus highlight's look (config.xml, glass_style): {@link #GLASS_DEFAULT}, {@link #GLASS_RIM}, {@link #GLASS_HALO} or {@link #GLASS_NEON}. */
     final String glassStyle;
 
     static final String GLOW_RADIAL = "radial", GLOW_HORIZON = "horizon";
-    static final String GLASS_DEFAULT = "glass", GLASS_RIM = "rim", GLASS_HALO = "halo";
+    static final String GLASS_DEFAULT = "glass", GLASS_RIM = "rim", GLASS_HALO = "halo", GLASS_NEON = "neon";
     /** Show each rotating wallpaper's name from wallpapers/captions.txt (config.xml / theme wallpaper_captions). */
     final boolean wallpaperCaptions;
     /** Answer VIEW_INPUTS with the Inputs menu (handle_view_inputs); see InputsRequestActivity. */
@@ -314,6 +315,7 @@ final class Config {
         this.columns = columns;
         this.rowsBelowDock = rowsBelowDock;
         this.animations = animations;
+        this.neonPremium = GLASS_NEON.equals(glassStyle(glassStyle));
         this.advancedEffects = advancedEffects;
         this.shamsiDate = shamsiDate;
         this.lunarDate = lunarDate;
@@ -411,6 +413,7 @@ final class Config {
     static String glassStyle(String value) {
         if (value == null) return GLASS_DEFAULT;
         String v = value.trim();
+        if (GLASS_NEON.equalsIgnoreCase(v)) return GLASS_NEON;
         if (GLASS_RIM.equalsIgnoreCase(v)) return GLASS_RIM;
         return GLASS_HALO.equalsIgnoreCase(v) ? GLASS_HALO : GLASS_DEFAULT;
     }
@@ -644,12 +647,14 @@ final class Config {
         // current theme without clearing choices from an older launcher version.
         SharedPreferences choices = ctx.getSharedPreferences(SETTINGS_NAME, Context.MODE_PRIVATE);
         // Unmounted storage looks like a theme reset; compare only once the file is readable.
-        if (mounted) syncThemeChoices(choices, dir, file);
+        boolean neonPremium = GLASS_NEON.equals(glassStyle(glassStyle));
+        if (mounted) syncThemeChoices(choices, dir, file, neonPremium);
         int chosenColumns = choices.getInt("columns", columns);
         if (chosenColumns >= 4 && chosenColumns <= 7) columns = chosenColumns;
         int chosenRows = choices.getInt(ROWS_BELOW_DOCK_KEY, rowsBelow);
         if (chosenRows >= 0 && chosenRows <= 3) rowsBelow = chosenRows;
-        animations = choices.getBoolean("animations", animations);
+        animations = choices.getBoolean("animations", animations)
+                && android.animation.ValueAnimator.areAnimatorsEnabled();
         advancedEffects = choices.getBoolean("advanced_effects", advancedEffects);
         File wallpaper = dir != null ? new File(dir, WALLPAPER_NAME) : null;
         if (wallpaper != null && !(wallpaper.isFile() && wallpaper.length() > 0)) wallpaper = null;
@@ -733,7 +738,8 @@ final class Config {
         return races;
     }
 
-    private static void syncThemeChoices(SharedPreferences choices, File dir, File config) {
+    private static void syncThemeChoices(SharedPreferences choices, File dir, File config, boolean neonPremium) {
+        boolean preserveChoices = preserveThemeChoices(neonPremium, choices.getBoolean("neon_theme", false));
         File revision = dir == null ? null : new File(dir, THEME_REVISION_NAME);
         String token = revisionToken(revision);
         String signature = fileStamp(config) + ":" + token;
@@ -742,15 +748,26 @@ final class Config {
             // Existing preferences survive an app upgrade, unless the first launch follows an
             // explicit theme push or reset by the updated tools.
             SharedPreferences.Editor editor = choices.edit();
-            if (!"absent".equals(token)) editor.remove("columns").remove("animations")
+            if (!preserveChoices && !"absent".equals(token)) editor.remove("columns").remove("animations")
                     .remove("advanced_effects").remove(ROWS_BELOW_DOCK_KEY).remove(WALLPAPER_CHOICE_KEY)
                     .remove(DOCK_OPACITY_KEY).remove(CLOCK_FORMAT_KEY);
-            editor.putString(THEME_SIGNATURE_KEY, signature).commit();
+            editor.putBoolean("neon_theme", neonPremium).putString(THEME_SIGNATURE_KEY, signature).commit();
+        } else if (!seen.equals(signature) && preserveChoices) {
+            // A visual Neon update must not erase the household's settings.
+            choices.edit().putBoolean("neon_theme", neonPremium).putString(THEME_SIGNATURE_KEY, signature).commit();
         } else if (!seen.equals(signature)) {
             choices.edit().remove("columns").remove("animations").remove("advanced_effects")
                     .remove(ROWS_BELOW_DOCK_KEY).remove(WALLPAPER_CHOICE_KEY).remove(DOCK_OPACITY_KEY)
-                    .remove(CLOCK_FORMAT_KEY).putString(THEME_SIGNATURE_KEY, signature).commit();
+                    .remove(CLOCK_FORMAT_KEY).putBoolean("neon_theme", neonPremium)
+                    .putString(THEME_SIGNATURE_KEY, signature).commit();
+        } else if (choices.getBoolean("neon_theme", false) != neonPremium) {
+            choices.edit().putBoolean("neon_theme", neonPremium).commit();
         }
+    }
+
+    /** Preserve choices both entering and leaving Neon, including the first upgrade. */
+    static boolean preserveThemeChoices(boolean incomingNeon, boolean previousNeon) {
+        return incomingNeon || previousNeon;
     }
 
     /** The dock band opacity chosen in Launcher settings, or the theme's when none (or an out-of-range one) is saved. */

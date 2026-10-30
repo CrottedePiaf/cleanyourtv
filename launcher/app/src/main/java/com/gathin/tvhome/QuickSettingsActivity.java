@@ -28,6 +28,7 @@ public final class QuickSettingsActivity extends Activity {
     protected void onCreate(Bundle state) {
         super.onCreate(state);
         setContentView(R.layout.activity_quick_settings);
+        Config config = Config.load(this);
         if (getResources().getBoolean(R.bool.rtl_menu_bar)) {
             View panel = findViewById(R.id.panel);
             android.widget.FrameLayout.LayoutParams position =
@@ -48,6 +49,12 @@ public final class QuickSettingsActivity extends Activity {
         // Through Home, so it rebuilds with the new choices when Launcher settings closes.
         addRow(rows, R.drawable.ic_home_settings, R.string.launcher_settings, 0,
                 new Intent(this, MainActivity.class).setAction(MainActivity.ACTION_LAUNCHER_SETTINGS));
+        if (config.neonPremium) {
+            View panel = findViewById(R.id.panel);
+            NeonStyle.panel(panel);
+            panel.setPivotY(0f);
+            Motion.panel(panel, config.animations, config.reducedMotion, -8 * getResources().getDisplayMetrics().density);
+        }
         rows.getChildAt(0).requestFocus();
     }
 
@@ -62,6 +69,7 @@ public final class QuickSettingsActivity extends Activity {
     @Override
     protected void onPause() {
         super.onPause();
+        findViewById(R.id.panel).animate().cancel();
         finish();
         overridePendingTransition(0, 0);
     }
